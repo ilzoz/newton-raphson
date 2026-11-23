@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Newton–Raphson Root Finder</title>
+<style>
+:root{--bg:#eef1f6;--card:#fff;--text:#111827;--muted:#6b7280;--border:#d9dee7;--accent:#2563eb;--accent2:#1d4ed8;--head:#0f172a;--ok:#15803d;--bad:#b91c1c;--tile:#f6f8fb;--curve:#2563eb;--tan:#f59e0b;--pt:#dc2626;--err:#7c3aed;--okbg:#dcfce7;--grid:#e5e7eb;--soft:#e5e9f0;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b1220;--card:#131c2e;--text:#e5e7eb;--muted:#9ca3af;--border:#26324a;--accent:#3b82f6;--accent2:#2563eb;--head:#020617;--ok:#4ade80;--bad:#f87171;--tile:#1a2540;--curve:#60a5fa;--err:#a78bfa;--okbg:#14351f;--grid:#243049;--soft:#202c47;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0b1220;--card:#131c2e;--text:#e5e7eb;--muted:#9ca3af;--border:#26324a;--accent:#3b82f6;--accent2:#2563eb;--head:#020617;--ok:#4ade80;--bad:#f87171;--tile:#1a2540;--curve:#60a5fa;--err:#a78bfa;--okbg:#14351f;--grid:#243049;--soft:#202c47;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:19px/1.4 "Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif}
+header{background:var(--head);color:#fff;padding:16px 26px;display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space-between;align-items:center}
+header h1{margin:0;font-size:1.6rem}
+header code{color:#94a3b8;font:1.15rem Consolas,monospace}
+main{display:grid;grid-template-columns:minmax(340px,580px) 1fr;gap:16px;padding:16px;max-width:2000px;margin:auto}
+@media (max-width:1000px){main{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:20px}
+.col{display:flex;flex-direction:column;gap:16px;min-width:0}
+label{display:block;font-size:.78rem;font-weight:700;color:var(--muted);margin:0 0 6px;letter-spacing:.04em}
+input,select{width:100%;font:inherit;font-size:1.2rem;padding:11px 13px;border:1px solid var(--border);border-radius:4px;background:var(--card);color:var(--text)}
+#f{font-family:Consolas,monospace;font-size:1.45rem}
+.hint{font-size:.88rem;color:var(--muted);margin:6px 0 16px}
+.row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+button{width:100%;font-family:inherit;border:0;border-radius:4px;cursor:pointer}
+#go{margin-top:26px;padding:15px;font-weight:700;font-size:1.3rem;background:var(--accent);color:#fff}
+#go:hover{background:var(--accent2)}
+#csv{margin-top:10px;padding:13px;font-size:1.15rem;background:var(--soft);color:var(--text)}
+#csv:hover{filter:brightness(.95)}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
+.tile{background:var(--tile);padding:12px 14px}
+.tile label{font-size:.72rem;margin:0}
+.tile b{display:block;font-size:1.75rem;margin-top:2px;overflow-wrap:anywhere}
+#status{font-weight:700;font-size:1.15rem;margin-top:16px}
+#deriv{font:1.05rem Consolas,monospace;color:var(--muted);margin-top:12px;overflow-wrap:anywhere;white-space:pre-wrap}
+.ok{color:var(--ok)}.bad{color:var(--bad)}
+.plots{display:flex;gap:6px;height:520px}
+.plots canvas{display:block;height:100%;min-width:0}
+#cv{flex:2.6;cursor:grab}#cv:active{cursor:grabbing}#ce{flex:1}
+@media (max-width:700px){.plots{flex-direction:column;height:900px}.plots canvas{flex:1!important;width:100%}}
+.bar{display:flex;gap:6px;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+.bar button{width:auto;padding:7px 14px;background:var(--soft);color:var(--text);font-size:1.05rem}
+.bar span{margin-left:auto;font-size:.9rem;color:var(--muted)}
+.tw{overflow-x:auto;padding:0}
+table{border-collapse:collapse;width:100%;font-size:1.25rem;min-width:760px}
+th{background:var(--soft);padding:14px 8px;font-size:1.05rem}
+td{padding:13px 8px;text-align:center;border-top:1px solid var(--border);font-variant-numeric:tabular-nums}
+tbody tr:nth-child(even) td{background:var(--tile)}
+tbody tr.last td{background:var(--okbg)}
+</style>
+</head>
+<body>
+<header><h1>Newton–Raphson Root Finder</h1><code>x(i+1) = x(i) − f(x(i)) / f′(x(i))</code></header>
+<main>
+<div class="col">
+  <div class="card">
+    <label for="ex">LECTURE EXAMPLES</label>
+    <select id="ex"></select>
+    <div style="height:16px"></div>
+    <label for="f">FUNCTION f(x) = 0</label>
+    <input id="f" autocomplete="off" spellcheck="false">
+    <div class="hint">Use ^ for powers. Supported: exp, sin, cos, tan, ln, sqrt, pi</div>
+    <div class="row">
+      <div><label for="x0">START x₀</label><input id="x0"></div>
+      <div><label for="tol">TOLERANCE</label><input id="tol" value="1e-4"></div>
+      <div><label for="mx">MAX ITER.</label><input id="mx" value="100"></div>
+    </div>
+    <button id="go">Calculate Root</button>
+    <button id="csv">Export table (CSV)</button>
+  </div>
+  <div class="card">
+    <label>RESULT</label>
+    <div class="tiles">
+      <div class="tile"><label>ROOT x*</label><b id="t-root">—</b></div>
+      <div class="tile"><label>ITERATIONS</label><b id="t-it">—</b></div>
+      <div class="tile"><label>f(x*)</label><b id="t-fr">—</b></div>
+      <div class="tile"><label>|f·f″/(f′)²| AT x₀</label><b id="t-c">—</b></div>
+    </div>
+    <div id="status"></div>
+    <div id="deriv"></div>
+  </div>
+</div>
+<div class="col">
+  <div class="card">
+    <div class="plots"><canvas id="cv"></canvas><canvas id="ce"></canvas></div>
+    <div class="bar"><button id="home" title="Reset view">⌂ Home</button><button id="zi" title="Zoom in">＋</button><button id="zo" title="Zoom out">－</button><button id="png" title="Save plot as image">Save</button><span id="pos">Scroll to zoom, drag to pan</span></div>
+  </div>
+  <div class="card tw">
+    <table><thead><tr><th>i</th><th>x_i</th><th>f(x_i)</th><th>f′(x_i)</th><th>x_(i+1)</th><th>|x_(i+1) − x_i|</th></tr></thead><tbody id="tb"></tbody></table>
+  </div>
+</div>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.2/math.min.js"></script>
+<script>
+const EX=[["x^3 - 8x + 5      (x0 = 0)","x^3 - 8x + 5","0"],["x^4 - 11x + 8      (x0 = 2)","x^4 - 11x + 8","2"],["e^(-x) - x      (x0 = 0)","exp(-x) - x","0"],["x^3 - 2x^2 + 0.25x + 0.75      (x0 = -1)","x^3 - 2x^2 + 0.25x + 0.75","-1"],["cos(x) - x      (x0 = 1)","cos(x) - x","1"]];
+const $=id=>document.getElementById(id);
+let R=null,view=null,M=null,drag=null;
+EX.forEach((e,i)=>{const o=document.createElement("option");o.value=i;o.textContent=e[0];$("ex").appendChild(o)});
+function load(i){$("f").value=EX[i][1];$("x0").value=EX[i][2]}
+$("ex").onchange=()=>{load($("ex").value);solve()};
+$("go").onclick=solve;
+document.querySelectorAll("input").forEach(i=>i.addEventListener("keydown",e=>{if(e.key==="Enter")solve()}));
+
+function ev(c,x){
+  let v;
+  try{v=c.evaluate({x})}catch(e){throw new Error("Cannot evaluate at x = "+x.toPrecision(6)+".")}
+  if(typeof v!=="number"||!isFinite(v))throw new Error("Result is not a finite real number at x = "+x.toPrecision(6)+".");
+  return v;
+}
+function run(txt,x0,tol,mx){
+  txt=txt.trim().replace(/=\s*0\s*$/,"").replace(/\bln\s*\(/g,"log(");
+  if(!txt)throw new Error("Please enter a function f(x).");
+  let node,d1,d2;
+  try{node=math.parse(txt);d1=math.derivative(node,"x");d2=math.derivative(d1,"x")}
+  catch(e){throw new Error("Could not read the function: "+e.message)}
+  const f=node.compile(),df=d1.compile(),ddf=d2.compile();
+  let x=x0,cond=null,rows=[],conv=false,msg="";
+  try{const d=ev(df,x);if(d!==0)cond=Math.abs(ev(f,x)*ev(ddf,x)/(d*d))}catch(e){}
+  for(let i=0;i<mx;i++){
+    const fx=ev(f,x),dfx=ev(df,x);
+    if(dfx===0){msg="f′(x) = 0 at x = "+x.toPrecision(6)+" (division by zero). Try a different x₀.";break}
+    const xn=x-fx/dfx,err=Math.abs(xn-x);
+    rows.push({i,x,fx,dfx,xn,err});x=xn;
+    if(err<tol){conv=true;msg="Converged: the root was found.";break}
+    if(Math.abs(x)>1e12){msg="The values are diverging. Try a different x₀.";break}
+    if(i===mx-1)msg="Reached the maximum of "+mx+" iterations without meeting the tolerance."
+  }
+  return{rows,root:x,conv,msg,cond,f,txt:node.toString(),d1:d1.toString()};
+}
+function solve(){
+  try{
+    const x0=Number(math.evaluate($("x0").value)),tol=Number($("tol").value),mx=parseInt($("mx").value,10);
+    if(!isFinite(x0)||!(tol>0)||!(mx>=1))throw new Error("x₀ and tolerance must be numbers, and max iterations a positive integer.");
+    R=run($("f").value,x0,tol,mx);
+  }catch(e){R=null;$("status").className="bad";$("status").textContent=e.message;return}
+  view=null;show();draw();
+}
+function show(){
+  $("t-it").textContent=R.rows.length;
+  const tr=$("t-root");
+  if(R.rows.length){tr.textContent=R.root.toFixed(8);tr.className=R.conv?"ok":"bad";$("t-fr").textContent=ev(R.f,R.root).toExponential(2)}
+  else{tr.textContent="—";tr.className="";$("t-fr").textContent="—"}
+  const c=$("t-c");
+  if(R.cond===null){c.textContent="n/a";c.className=""}
+  else{c.textContent=R.cond.toFixed(4)+(R.cond<1?"  ✓":"  ✗");c.className=R.cond<1?"ok":"bad"}
+  let m=R.msg;if(R.cond!==null&&R.cond>=1)m+="\nWarning: the convergence condition is not satisfied at x₀.";
+  $("status").textContent=m;$("status").style.whiteSpace="pre-wrap";$("status").className=R.conv?"ok":"bad";
+  $("deriv").textContent="f(x)  = "+R.txt+"\nf′(x) = "+R.d1;
+  $("tb").innerHTML=R.rows.map((r,k)=>`<tr${k===R.rows.length-1&&R.conv?' class="last"':""}><td>${r.i}</td><td>${r.x.toFixed(10)}</td><td>${r.fx.toExponential(4)}</td><td>${r.dfx.toFixed(6)}</td><td>${r.xn.toFixed(10)}</td><td>${r.err.toExponential(3)}</td></tr>`).join("");
+}
+function setup(cv){
+  const dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;
+  cv.width=W*dpr;cv.height=H*dpr;
+  const g=cv.getContext("2d");g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,W,H);
+  return{g,W,H};
+}
+const CS=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function samples(lo,hi,N){
+  const gx=[],gy=[];
+  for(let k=0;k<N;k++){const x=lo+(hi-lo)*k/(N-1);let y=NaN;try{y=ev(R.f,x)}catch(e){}gx.push(x);gy.push(y)}
+  return{gx,gy};
+}
+function autoView(){
+  const xs=R.rows.map(r=>r.x).concat([R.root]);
+  let lo=Math.min(...xs),hi=Math.max(...xs);const pad=Math.max((hi-lo)*.3,1);lo-=pad;hi+=pad;
+  const{gy}=samples(lo,hi,700);
+  const fin=gy.filter(isFinite).sort((a,b)=>a-b),fxs=R.rows.map(r=>r.fx);
+  let ymin=Math.min(fin[Math.floor(fin.length*.01)]??0,0,...fxs),ymax=Math.max(fin[Math.floor(fin.length*.99)]??0,0,...fxs);
+  const m=(ymax-ymin)*.12||1;
+  return{lo,hi,ymin:ymin-m,ymax:ymax+m};
+}
+function draw(){drawMain();drawErr()}
+function drawMain(){
+  const{g,W,H}=setup($("cv"));
+  if(!R||!R.rows.length){M=null;return}
+  if(!view)view=autoView();
+  const{lo,hi,ymin,ymax}=view;
+  const L=64,Rr=14,T=44,B=46,pw=W-L-Rr,ph=H-T-B;
+  const X=x=>L+(x-lo)/(hi-lo)*pw,Y=y=>T+(ymax-y)/(ymax-ymin)*ph;
+  M={L,T,pw,ph,lo,hi,ymin,ymax};
+  g.font="14px Segoe UI,sans-serif";g.lineWidth=1;
+  for(let k=0;k<=6;k++){
+    const x=lo+(hi-lo)*k/6,y=ymin+(ymax-ymin)*k/6;
+    g.strokeStyle=CS("--grid");
+    g.beginPath();g.moveTo(X(x),T);g.lineTo(X(x),T+ph);g.stroke();
+    g.beginPath();g.moveTo(L,Y(y));g.lineTo(L+pw,Y(y));g.stroke();
+    g.fillStyle=CS("--muted");g.textAlign="center";g.fillText(x.toPrecision(3),X(x),T+ph+20);
+    g.textAlign="right";g.fillText(y.toPrecision(3),L-8,Y(y)+5);
+  }
+  g.textAlign="center";g.fillText("x",L+pw/2,H-8);
+  g.save();g.translate(16,T+ph/2);g.rotate(-Math.PI/2);g.fillText("f(x)",0,0);g.restore();
+  g.fillStyle=CS("--text");g.font="bold 16px Segoe UI,sans-serif";g.textAlign="left";g.fillText("f(x) = "+R.txt,L,24);
+  g.save();g.beginPath();g.rect(L,T,pw,ph);g.clip();
+  if(ymin<0&&ymax>0){g.strokeStyle=CS("--text");g.lineWidth=1.3;g.beginPath();g.moveTo(L,Y(0));g.lineTo(L+pw,Y(0));g.stroke()}
+  const{gx,gy}=samples(lo,hi,800);
+  g.strokeStyle=CS("--curve");g.lineWidth=2.6;g.beginPath();let pen=false;
+  for(let k=0;k<gx.length;k++){if(!isFinite(gy[k])){pen=false;continue}const px=X(gx[k]),py=Y(gy[k]);pen?g.lineTo(px,py):g.moveTo(px,py);pen=true}
+  g.stroke();
+  R.rows.slice(0,8).forEach(r=>{
+    g.setLineDash([3,4]);g.strokeStyle=CS("--muted");g.lineWidth=1;g.beginPath();g.moveTo(X(r.x),Y(0));g.lineTo(X(r.x),Y(r.fx));g.stroke();g.setLineDash([]);
+    g.strokeStyle=CS("--tan");g.lineWidth=1.8;g.beginPath();g.moveTo(X(r.x),Y(r.fx));g.lineTo(X(r.xn),Y(0));g.stroke();
+  });
+  const placed=[];
+  R.rows.forEach(r=>{
+    g.fillStyle=CS("--pt");g.strokeStyle="#fff";g.lineWidth=1;g.beginPath();g.arc(X(r.x),Y(r.fx),5.5,0,7);g.fill();g.stroke();
+    if(placed.every(p=>Math.abs(r.x-p)>.045*(hi-lo))){g.fillStyle="#991b1b";g.font="bold 14px Segoe UI,sans-serif";g.textAlign="left";g.fillText("x"+r.i,X(r.x)+8,Y(r.fx)-9);placed.push(r.x)}
+  });
+  if(R.conv){
+    g.fillStyle=CS("--ok");g.strokeStyle="#fff";g.lineWidth=1;g.beginPath();
+    for(let k=0;k<10;k++){const a=-Math.PI/2+k*Math.PI/5,rad=k%2?6:14;g.lineTo(X(R.root)+rad*Math.cos(a),Y(0)+rad*Math.sin(a))}
+    g.closePath();g.fill();g.stroke();
+  }
+  g.restore();
+  const items=[["f(x)","--curve",0],["Tangent lines","--tan",0],["Iterates (xᵢ, f(xᵢ))","--pt",1]];
+  if(R.conv)items.push(["Root ≈ "+R.root.toFixed(6),"--ok",2]);
+  g.font="13px Segoe UI,sans-serif";
+  const lw=Math.max(...items.map(i=>g.measureText(i[0]).width))+46,lh=items.length*20+10,lx=L+pw-lw-8,ly=T+8;
+  g.fillStyle=CS("--card");g.globalAlpha=.92;g.fillRect(lx,ly,lw,lh);g.globalAlpha=1;
+  g.strokeStyle=CS("--border");g.lineWidth=1;g.strokeRect(lx,ly,lw,lh);
+  items.forEach((it,k)=>{
+    const yy=ly+19+k*20;g.strokeStyle=g.fillStyle=CS(it[1]);g.lineWidth=2.4;
+    if(it[2]===0){g.beginPath();g.moveTo(lx+8,yy-4);g.lineTo(lx+30,yy-4);g.stroke()}
+    else{g.beginPath();g.arc(lx+19,yy-4,it[2]===1?4.5:6,0,7);g.fill()}
+    g.fillStyle=CS("--text");g.textAlign="left";g.fillText(it[0],lx+38,yy);
+  });
+}
+function drawErr(){
+  const{g,W,H}=setup($("ce"));
+  const L=64,Rr=14,T=44,B=46,pw=W-L-Rr,ph=H-T-B;
+  g.fillStyle=CS("--text");g.font="bold 16px Segoe UI,sans-serif";g.textAlign="left";g.fillText("Error per iteration",L,24);
+  const pts=R?R.rows.filter(r=>r.err>0).map(r=>[r.i+1,r.err]):[];
+  if(!pts.length){g.fillStyle=CS("--muted");g.font="15px Segoe UI,sans-serif";g.textAlign="center";g.fillText("No error data",W/2,H/2);return}
+  const n=Math.max(...pts.map(p=>p[0])),ls=pts.map(p=>Math.log10(p[1]));
+  let a=Math.min(...ls)-.4,b=Math.max(...ls)+.4;if(b-a<1){const c=(a+b)/2;a=c-.5;b=c+.5}
+  const x0=.5,x1=n+.5,X=x=>L+(x-x0)/(x1-x0)*pw,Y=v=>T+(b-v)/(b-a)*ph;
+  g.font="14px Segoe UI,sans-serif";g.lineWidth=1;
+  const step=Math.max(1,Math.ceil(n/6));
+  for(let i=step;i<=n;i+=step){g.strokeStyle=CS("--grid");g.beginPath();g.moveTo(X(i),T);g.lineTo(X(i),T+ph);g.stroke();g.fillStyle=CS("--muted");g.textAlign="center";g.fillText(i,X(i),T+ph+20)}
+  let ticks=[];for(let p=Math.ceil(a);p<=Math.floor(b);p++)ticks.push(p);
+  if(!ticks.length)ticks=[(a+b)/2];
+  ticks.forEach(p=>{g.strokeStyle=CS("--grid");g.beginPath();g.moveTo(L,Y(p));g.lineTo(L+pw,Y(p));g.stroke();g.fillStyle=CS("--muted");g.textAlign="right";g.fillText(Number.isInteger(p)?"1e"+p:Math.pow(10,p).toExponential(1),L-8,Y(p)+5)});
+  g.fillStyle=CS("--muted");g.textAlign="center";g.fillText("Iteration",L+pw/2,H-8);
+  g.save();g.translate(16,T+ph/2);g.rotate(-Math.PI/2);g.fillText("|x(i+1) − x(i)|",0,0);g.restore();
+  g.strokeStyle=CS("--err");g.lineWidth=2;g.beginPath();
+  pts.forEach((p,k)=>{const px=X(p[0]),py=Y(Math.log10(p[1]));k?g.lineTo(px,py):g.moveTo(px,py)});g.stroke();
+  g.fillStyle=CS("--err");pts.forEach(p=>{g.beginPath();g.arc(X(p[0]),Y(Math.log10(p[1])),4.5,0,7);g.fill()});
+}
+function zoom(f,cx,cy){
+  if(!view||!M)return;
+  const{lo,hi,ymin,ymax}=view;
+  const dx=cx??(lo+hi)/2,dy=cy??(ymin+ymax)/2;
+  view={lo:dx-(dx-lo)*f,hi:dx+(hi-dx)*f,ymin:dy-(dy-ymin)*f,ymax:dy+(ymax-dy)*f};drawMain();
+}
+function toData(e){
+  const r=$("cv").getBoundingClientRect(),px=e.clientX-r.left,py=e.clientY-r.top;
+  return{x:M.lo+(px-M.L)/M.pw*(M.hi-M.lo),y:M.ymax-(py-M.T)/M.ph*(M.ymax-M.ymin)};
+}
+const cvEl=$("cv");
+cvEl.addEventListener("wheel",e=>{if(!M)return;e.preventDefault();const d=toData(e);zoom(e.deltaY<0?1/1.15:1.15,d.x,d.y)},{passive:false});
+cvEl.addEventListener("mousedown",e=>{if(M)drag={x:e.clientX,y:e.clientY,v:{...view}}});
+window.addEventListener("mouseup",()=>{drag=null});
+window.addEventListener("mousemove",e=>{
+  if(drag&&M){
+    const sx=-(e.clientX-drag.x)/M.pw*(drag.v.hi-drag.v.lo),sy=(e.clientY-drag.y)/M.ph*(drag.v.ymax-drag.v.ymin);
+    view={lo:drag.v.lo+sx,hi:drag.v.hi+sx,ymin:drag.v.ymin+sy,ymax:drag.v.ymax+sy};drawMain();
+  }
+});
+cvEl.addEventListener("mousemove",e=>{if(!M)return;const d=toData(e);$("pos").textContent="(x, y) = ("+d.x.toPrecision(4)+", "+d.y.toPrecision(4)+")"});
+cvEl.addEventListener("mouseleave",()=>{$("pos").textContent="Scroll to zoom, drag to pan"});
+$("home").onclick=()=>{view=null;drawMain()};
+$("zi").onclick=()=>zoom(1/1.4);
+$("zo").onclick=()=>zoom(1.4);
+function save(name,blob){
+  try{const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove()}catch(e){}
+}
+$("png").onclick=()=>{try{cvEl.toBlob(b=>save("plot.png",b))}catch(e){}};
+$("csv").onclick=()=>{
+  if(!R||!R.rows.length)return;
+  const lines=["i,x_i,f(x_i),f'(x_i),x_(i+1),error"].concat(R.rows.map(r=>[r.i,r.x,r.fx,r.dfx,r.xn,r.err].join(",")));
+  save("newton_raphson_table.csv",new Blob([lines.join("\n")],{type:"text/csv"}));
+};
+window.addEventListener("resize",draw);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change",draw);
+if(typeof math==="undefined"){$("status").className="bad";$("status").textContent="Could not load the math library. Check your internet connection and reload."}
+else{load(0);solve()}
+</script>
+</body>
+</html>
